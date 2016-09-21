@@ -50,15 +50,16 @@ RX_SITE = 'G3WKL'
 #start = (7, 2005) # A (month, year) tuple
 #stop = (6, 2012) # (month, year) tuple or None for a single month
 start = (5, 2009) # A (month, year) tuple
-stop = (12, 2013) # (month, year) tuple or None for a single month
+stop = (8, 2009) # (month, year) tuple or None for a single month
 
 # External application paths
-BEACON_CSV = "/home/jwatson/Downloads/selective-beacon-export.csv"
+#BEACON_CSV = "/home/jwatson/Downloads/selective-beacon-export.csv"
+BEACON_CSV = "beacon_cl.csv"
 ITURHFPROP_PATH = "/usr/bin/ITURHFProp"
 ITURHFPROP_DATA_PATH = "/home/jwatson/github/proppy/flask/data/"
 VOACAP_PATH = "/usr/local/bin/voacapl"
 ITSHFBC_PATH = "/home/jwatson/itshfbc"
-DO_PLOTS = False
+DO_PLOTS = True
 
 
 sites = {"GB3RAL":{"lat":51.56, "lng":-1.29, "gain":-0.7},
@@ -200,7 +201,7 @@ def get_p553_prediction_df(tx_site, rx_site, year, month):
     buf.append('Path.ManMadeNoise "{:s}"'.format('RURAL'))
     buf.append('Path.Modulation "ANALOG"')
     buf.append('Path.SorL "SHORTPATH"')
-    buf.append('RptFileFormat "RPT_OPMUF | RPT_PR | RPT_BMUFD"')
+    buf.append('RptFileFormat "RPT_OPMUF | RPT_PR"')
     buf.append('LL.lat {:.2f}'.format(rx_lat))
     buf.append('LL.lng {:.2f}'.format(rx_lng))
     buf.append('LR.lat {:.2f}'.format(rx_lat))
@@ -246,7 +247,7 @@ def get_utc(row):
 
 
 """
-Calibration levels supplied by M.Walden.
+Calibration levels supplied by Dr. M.Walden.
 NOTE: Calibration levels are valid from May 2009 only
 """
 def calibrate_rx_level(rx_db, rx_site):
@@ -358,7 +359,7 @@ df = pd.read_csv(BEACON_CSV,
         header=0,
         usecols=['ts','StnReporting','Year','Month','Day','HourGMT','Minute','GB3RAL','GB3WES','GB3ORK','Noise'])
 #print(df.head())
-
+df['ts'] = pd.to_datetime(df['ts'])
 months_list = get_months_list(start,stop)
 
 for month, year in months_list:
