@@ -49,16 +49,17 @@ TX_SITE = 'GB3WES'
 RX_SITE = 'G3WKL'
 #start = (7, 2005) # A (month, year) tuple
 #stop = (6, 2012) # (month, year) tuple or None for a single month
-start = (1, 2005) # A (month, year) tuple
+start = (5, 2009) # A (month, year) tuple
 stop = (12, 2013) # (month, year) tuple or None for a single month
 
 # External application paths
 BEACON_CSV = "/home/jwatson/Downloads/selective-beacon-export.csv"
 ITURHFPROP_PATH = "/usr/bin/ITURHFProp"
-ITURHFPROP_DATA_PATH = "/home/jwatson/develop/proppy/flask/data/"
+ITURHFPROP_DATA_PATH = "/home/jwatson/github/proppy/flask/data/"
 VOACAP_PATH = "/usr/local/bin/voacapl"
 ITSHFBC_PATH = "/home/jwatson/itshfbc"
 DO_PLOTS = False
+
 
 sites = {"GB3RAL":{"lat":51.56, "lng":-1.29, "gain":-0.7},
     "GB3WES":{"lat":54.56, "lng":-2.63, "gain":4.1},
@@ -72,11 +73,6 @@ sites = {"GB3RAL":{"lat":51.56, "lng":-1.29, "gain":-0.7},
 ssn_repo = {"sources": ["http://sidc.oma.be/silso/INFO/snmstotcsv.php", "http://sidc.oma.be/silso/FORECASTS/prediSC.txt"],
     "retrieved": 1472203198.672534,
     "ssn": {
-        "2004": {"4":71.0,"8":63.0,  "6": 67.1, "1": 80.1, "2": 76.4, "12": 55.7, "7": 64.8, "10": 57.9, "3": 73.2, "5": 69.5, "11": 56.6, "9": 60.2},
-        "2005": {"2": 53.2, "3": 52.3, "10": 38.9, "12": 36.0, "11": 38.4, "5": 45.0, "9": 39.4, "4": 49.3, "7": 44.6, "1": 54.5, "6": 44.5, "8": 41.9},
-        "2006": {"2": 29.7, "3": 27.4, "10": 23.7, "12": 20.2, "11": 21.1, "5": 27.4, "9": 26.0, "4": 27.0, "7": 25.0, "1": 33.0, "6": 26.2, "8": 25.9},
-        "2007": {"2": 19.0, "3": 17.7, "10": 9.9, "12": 7.9, "11": 9.2, "5": 14.4, "9": 9.6, "4": 16.4, "7": 11.6, "1": 19.8, "6": 12.8, "8": 9.9},
-        "2008": {"2": 5.6, "3": 5.1, "10": 2.4, "12": 2.2, "11": 2.3, "5": 5.4, "9": 3.2, "4": 5.1, "7": 4.0, "1": 6.6, "6": 4.8, "8": 3.8},
         "2009": {"2": 2.7, "3": 2.9, "10": 10.9, "12": 12.7, "11": 11.7, "5": 3.5, "9": 9.5, "4": 3.3, "7": 5.5, "1": 2.5, "6": 4.1, "8": 7.4},
         "2010": {"2": 16.1, "3": 18.5, "10": 34.5, "12": 42.5, "11": 39.1, "5": 23.1, "9": 29.5, "4": 20.8, "7": 25.2, "1": 14.0, "6": 24.6, "8": 26.4},
         "2011": {"2": 48.8, "3": 53.8, "10": 87.4, "12": 92.5, "11": 89.4, "5": 69.3, "9":86.6, "4": 61.1, "7": 83.6, "1": 45.7, "6": 77.2, "8": 86.3},
@@ -91,11 +87,6 @@ ssn_repo = {"sources": ["http://sidc.oma.be/silso/INFO/snmstotcsv.php", "http://
 voa_ssn_repo = {"sources": ["ftp://ftp.ngdc.noaa.gov/STP/space-weather/solar-data/solar-indices/sunspot-numbers/predicted/table_international-sunspot-numbers_monthly-predicted.txt",],
     "retrieved": 1472203198.672534,
     "ssn": {
-        "2004": {"1":52.0,"2":49.3,  "3":47.1, "4":45.5, "5":43.9, "6":41.7, "7":40.2, "8":39.2, "9":37.5, "10":35.9, "11":35.3, "12":35.2},
-        "2005": {"1":34.6,"2":33.9,  "3":33.5, "4":31.6, "5":28.9, "6":28.8, "7":29.1, "8":27.4, "9":25.8, "10":25.5, "11":24.9, "12":23.0},
-        "2006": {"1":20.8,"2":18.6,  "3":17.4, "4":17.1, "5":17.3, "6":16.3, "7":15.3, "8":15.6, "9":15.6, "10":14.2, "11":12.6, "12":12.1},
-        "2007": {"1":11.9,"2":11.5,  "3":10.7, "4":9.9,  "5":8.7,  "6":7.7,  "7":7.0,  "8":6.0,  "9":5.9,  "10":6.0,  "11":5.7,  "12":4.9},
-        "2008": {"1":4.2, "2":3.5,   "3":3.3,  "4":3.3,  "5":3.5,  "6":3.2,  "7":2.8,  "8":2.7,  "9":2.3,  "10":1.9,  "11":1.8,  "12":1.7},
         "2009": {"1":1.8, "2":1.9,   "3":2.0,  "4":2.2,  "5":2.3,  "6":2.7,  "7":3.6,  "8":4.8,  "9":6.1,  "10":7.1,  "11":7.6,  "12":8.3},
         "2010": {"1":9.3, "2":10.6,  "3":12.3, "4":14.0, "5":15.5, "6":16.4, "7":16.8, "8":17.4, "9":19.6, "10":23.2, "11":26.5, "12":28.8},
         "2011": {"1":30.9, "2":33.4, "3":36.9, "4":41.8, "5":47.6, "6":53.2, "7":57.2, "8":59.0, "9":59.5, "10":59.9, "11":61.1, "12":63.4},
@@ -209,7 +200,7 @@ def get_p553_prediction_df(tx_site, rx_site, year, month):
     buf.append('Path.ManMadeNoise "{:s}"'.format('RURAL'))
     buf.append('Path.Modulation "ANALOG"')
     buf.append('Path.SorL "SHORTPATH"')
-    buf.append('RptFileFormat "RPT_OPMUF | RPT_PR"')
+    buf.append('RptFileFormat "RPT_OPMUF | RPT_PR | RPT_BMUFD"')
     buf.append('LL.lat {:.2f}'.format(rx_lat))
     buf.append('LL.lng {:.2f}'.format(rx_lng))
     buf.append('LR.lat {:.2f}'.format(rx_lat))
@@ -231,7 +222,7 @@ def get_p553_prediction_df(tx_site, rx_site, year, month):
         output_file.name],
         stdout=FNULL,
         stderr=subprocess.STDOUT)
-    #print(input_file.name)
+    print(input_file.name)
     #print(output_file.name)
     result_list = []
     try:
@@ -244,7 +235,7 @@ def get_p553_prediction_df(tx_site, rx_site, year, month):
     except Exception as e:
         print(text_in)
         print(e)
-    os.remove(input_file.name)
+    #os.remove(input_file.name)
     os.remove(output_file.name)
     pred_df = pd.DataFrame(result_list)
     return pred_df
@@ -255,20 +246,23 @@ def get_utc(row):
 
 
 """
-HACK ALERT...
-This is complete hack until I understand the format of the receive levels...
-Values in this section were derived by eye from M.Walden's paper
+Calibration levels supplied by M.Walden.
+NOTE: Calibration levels are valid from May 2009 only
 """
 def calibrate_rx_level(rx_db, rx_site):
-    offset = 175
+    offset = 0
     if rx_site == "G3WKL":
-        offset = 168.25
+        offset = 168.1
     elif rx_site == "G3SET":
         offset = 180.00
     elif rx_site == "G4ZFQ":
-        offset = 178.25
+        offset = 177.9
     elif rx_site == "GM4SLV":
         offset = 183
+    elif rx_site == "G8IMR":
+        offset = 179
+    else:
+        raise KeyError("Calibration not found for site {:s}".format(rx_site))
     return rx_db - offset
 
 
