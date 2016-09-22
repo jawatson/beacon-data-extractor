@@ -50,13 +50,13 @@ RX_SITE = 'G3WKL'
 #start = (7, 2005) # A (month, year) tuple
 #stop = (6, 2012) # (month, year) tuple or None for a single month
 start = (5, 2009) # A (month, year) tuple
-stop = (8, 2009) # (month, year) tuple or None for a single month
+stop = None # (month, year) tuple or None for a single month
 
 # External application paths
 #BEACON_CSV = "/home/jwatson/Downloads/selective-beacon-export.csv"
 BEACON_CSV = "beacon_cl.csv"
 ITURHFPROP_PATH = "/usr/bin/ITURHFProp"
-ITURHFPROP_DATA_PATH = "/home/jwatson/github/proppy/flask/data/"
+ITURHFPROP_DATA_PATH = "/home/jwatson/develop/proppy/flask/data/"
 VOACAP_PATH = "/usr/local/bin/voacapl"
 ITSHFBC_PATH = "/home/jwatson/itshfbc"
 DO_PLOTS = True
@@ -360,6 +360,8 @@ df = pd.read_csv(BEACON_CSV,
         usecols=['ts','StnReporting','Year','Month','Day','HourGMT','Minute','GB3RAL','GB3WES','GB3ORK','Noise'])
 #print(df.head())
 df['ts'] = pd.to_datetime(df['ts'])
+df.set_index(keys='ts', inplace=True)
+
 months_list = get_months_list(start,stop)
 
 for month, year in months_list:
@@ -381,6 +383,7 @@ for month, year in months_list:
     wdf['Noise'] = wdf['Noise'].apply(calibrate_rx_level, args=(RX_SITE,))
 
     wdf['utc'] = wdf.apply(lambda row: get_utc(row), axis=1)
+    wdf = wdf[(wdf[TX_SITE]>(wdf.Noise+15))] # Discard values where SNR <= 15
 
     # Calculate median for values where s/n > 15
     # A List of the sample size at each utc value
@@ -389,7 +392,24 @@ for month, year in months_list:
         print("WARNING: Tx. Appears to be offline - skipping this one")
         analysis_df = analysis_df.append(get_null_entry(year, month), ignore_index=True)
         continue
+    #Method 1
     medians_df = wdf[(wdf[TX_SITE]>(wdf.Noise+15))].groupby('utc')[[TX_SITE]].median()
+    #print (medians_df)
+    #medians_df is essentially a list of utc values and medians
+    #Method 2
+    for window in [0, 30, 60]:
+        for utc in range(0,24):
+            t = datetime.datetime(year,month,15, utc, 0, 0)
+            sample_start = (t - datetime.timedelta(minutes=window/2)).time()
+            sample_end = (t + datetime.timedelta(minutes=window/2)).time()
+
+            sample = wdf.between_time(sample_start, sample_end, include_start=True, include_end=True)[TX_SITE]
+            #print(sample)
+            #print("{:d} Sample size = {:d}.  Median = {:.6f}".format(utc, sample.shape[0], sample.median()))
+            medians_df.set_value(utc, 'median_w{:d}'.format(window), sample.median())
+            medians_df.set_value(utc, 'median_w{:d}_ss'.format(window), sample.shape[0])
+    #print (medians_df)
+    medians_df.to_csv("{:s}_{:s}_medians.csv".format(TX_SITE, RX_SITE))
 
     p533_pred_df = get_p553_prediction_df(TX_SITE, RX_SITE, year, month)
     voa_pred_df = get_voacap_prediction_df(TX_SITE, RX_SITE, year, month)
@@ -410,8 +430,21 @@ for month, year in months_list:
                 label='Measurement')
 
         medians_df.index.name = 'utc'
+        #print(medians_df.head())
         medians_df.reset_index(inplace=True)
         medians_df.plot.scatter(x='utc', y=TX_SITE, color='#2C82C9', label='Median', s=75, ax=ax)
+
+        """ Some temporary plots follow"""
+        label="Median W0"
+        medians_df.plot.line(x='utc', y='median_w0', label=label, linewidth=2, marker='o', ax=ax)
+
+        label="Median W30"
+        medians_df.plot.line(x='utc', y='median_w30', label=label, linewidth=2, marker='o', ax=ax)
+
+        label="Median W60"
+        medians_df.plot.line(x='utc', y='median_w60', label=label, linewidth=2, marker='o', ax=ax)
+
+        """end of the temporary plots"""
 
         if not p533_pred_df.empty:
             label="Predicted (P533) (RMSE={:.2f} r={:.2f})".format(float(monthly['p533_rmse']), float(monthly['p533_corr']))
@@ -436,12 +469,12 @@ for month, year in months_list:
         plt.close()
     monthly['month'] = datetime.date(year, month, 15)
     analysis_df = analysis_df.append(monthly, ignore_index=True)
-
+"""
 print(analysis_df)
 col_names = ["p533_corr_gt_1d", "p533_rmse_gt_1d", "voa_corr_gt_1d", "voa_rmse_gt_1d"]
 for col in col_names:
     print("{:s} (Mean): {:.2f}".format(col, analysis_df[col].mean()))
-
+"""
 analysis_df.voa_rmse_gt_1d = analysis_df.voa_rmse_gt_1d.astype(float)
 analysis_df.p533_rmse_gt_1d = analysis_df.p533_rmse_gt_1d.astype(float)
 
@@ -472,7 +505,10 @@ num_rows = len(analysis_df.index)
 num_valid_months = analysis_df['p533_corr_gt_1d'].count()
 print(analysis_df)
 print()
-print("{:s}-{:s} {:s} {:d} - {:s} {:d} ({:d} months)".format(TX_SITE, RX_SITE, calendar.month_name[start[0]], start[1], calendar.month_name[stop[0]], stop[1], num_rows))
+if len(months_list) == 1:
+    print("{:s}-{:s} {:s} {:d}".format(TX_SITE, RX_SITE, calendar.month_name[months_list[0][0]], months_list[0][1]))
+else:
+    print("{:s}-{:s} {:s} {:d} - {:s} {:d} ({:d} months)".format(TX_SITE, RX_SITE, calendar.month_name[start[0]], start[1], calendar.month_name[stop[0]], stop[1], num_rows))
 print("Data parsed for {:d} months ({:.2f}%)".format(num_valid_months, 100*(num_valid_months/num_rows)))
 print()
 print("  P533 r: {:.2f}    P533 RMSE: {:.2f}".format(analysis_df['p533_corr'].mean(), analysis_df['p533_rmse'].mean()))
