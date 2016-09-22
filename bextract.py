@@ -45,18 +45,19 @@ pd.options.mode.chained_assignment = None  # default='warn'
 
 """ CHANGE THESE PARAMETERS TO DEFINE THE CIRCUITS TO EVALUATE """
 
-TX_SITE = 'GB3WES'
-RX_SITE = 'G3WKL'
+
+TX_SITE = 'GB3RAL'
+RX_SITE = 'G4ZFQ'
 #start = (7, 2005) # A (month, year) tuple
 #stop = (6, 2012) # (month, year) tuple or None for a single month
-start = (5, 2009) # A (month, year) tuple
+start = (1, 2010) # A (month, year) tuple
 stop = None # (month, year) tuple or None for a single month
 
 # External application paths
 #BEACON_CSV = "/home/jwatson/Downloads/selective-beacon-export.csv"
 BEACON_CSV = "beacon_cl.csv"
 ITURHFPROP_PATH = "/usr/bin/ITURHFProp"
-ITURHFPROP_DATA_PATH = "/home/jwatson/develop/proppy/flask/data/"
+ITURHFPROP_DATA_PATH = "/home/jwatson/github/proppy/flask/data/"
 VOACAP_PATH = "/usr/local/bin/voacapl"
 ITSHFBC_PATH = "/home/jwatson/itshfbc"
 DO_PLOTS = True
@@ -354,13 +355,13 @@ analysis_df = pd.DataFrame(columns=("month", "p533_rmse", "p533_corr", "voa_rmse
 
 print("Loading RSGB Dataframe...")
 
+# NOTE: The df has a non-unique index
 df = pd.read_csv(BEACON_CSV,
         sep=',',
         header=0,
+        index_col='ts',
+        parse_dates = True,
         usecols=['ts','StnReporting','Year','Month','Day','HourGMT','Minute','GB3RAL','GB3WES','GB3ORK','Noise'])
-#print(df.head())
-df['ts'] = pd.to_datetime(df['ts'])
-df.set_index(keys='ts', inplace=True)
 
 months_list = get_months_list(start,stop)
 
@@ -407,6 +408,7 @@ for month, year in months_list:
             #print(sample)
             #print("{:d} Sample size = {:d}.  Median = {:.6f}".format(utc, sample.shape[0], sample.median()))
             medians_df.set_value(utc, 'median_w{:d}'.format(window), sample.median())
+            medians_df.set_value(utc, 'median_w{:d}_std'.format(window), sample.std())
             medians_df.set_value(utc, 'median_w{:d}_ss'.format(window), sample.shape[0])
     #print (medians_df)
     medians_df.to_csv("{:s}_{:s}_medians.csv".format(TX_SITE, RX_SITE))
