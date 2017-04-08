@@ -48,20 +48,21 @@ pd.options.mode.chained_assignment = None  # default='warn'
 
 TX_SITE = 'GB3RAL'
 RX_SITE = 'G4ZFQ'
-#start = (7, 2005) # A (month, year) tuple
-#stop = (6, 2012) # (month, year) tuple or None for a single month
-start = (1, 2010) # A (month, year) tuple
-stop = None # (month, year) tuple or None for a single month
+start = (7, 2005) # A (month, year) tuple
+stop = (6, 2012) # (month, year) tuple or None for a single month
+#start = (1, 2010) # A (month, year) tuple
+#stop = None # (month, year) tuple or None for a single month
 
 # External application paths
 #BEACON_CSV = "/home/jwatson/Downloads/selective-beacon-export.csv"
 BEACON_CSV = "beacon_cl.csv"
 ITURHFPROP_PATH = "/usr/bin/ITURHFProp"
-ITURHFPROP_DATA_PATH = "/home/jwatson/github/proppy/flask/data/"
+ITURHFPROP_DATA_PATH = "/usr/local/share/iturhfprop/data/"
+
 VOACAP_PATH = "/usr/local/bin/voacapl"
 ITSHFBC_PATH = "/home/jwatson/itshfbc"
 DO_PLOTS = True
-
+WINDOW = 60
 
 sites = {"GB3RAL":{"lat":51.56, "lng":-1.29, "gain":-0.7},
     "GB3WES":{"lat":54.56, "lng":-2.63, "gain":4.1},
@@ -224,7 +225,7 @@ def get_p553_prediction_df(tx_site, rx_site, year, month):
         output_file.name],
         stdout=FNULL,
         stderr=subprocess.STDOUT)
-    print(input_file.name)
+    #print(input_file.name)
     #print(output_file.name)
     result_list = []
     try:
@@ -238,7 +239,7 @@ def get_p553_prediction_df(tx_site, rx_site, year, month):
         print(text_in)
         print(e)
     #os.remove(input_file.name)
-    os.remove(output_file.name)
+    #os.remove(output_file.name)
     pred_df = pd.DataFrame(result_list)
     return pred_df
 
@@ -300,7 +301,7 @@ def get_rmse(l1, l2):
 
 def do_analysis(medians_df, sample_sizes, voa_pred_df, p533_pred_df):
     # Build a masked array of median values for each hour.  The mask hides missing UTC values.
-    medians_ma = ma.masked_values([medians_df[TX_SITE].get(utc, 1.e20) for utc in np.arange(0,24,1)], 1.e20)
+    medians_ma = ma.masked_values([medians_df['median_pwr'].get(utc, 1.e20) for utc in np.arange(0,24,1)], 1.e20)
 
     p533_corr = get_correlation(medians_ma, np.array(p533_pred_df['rx_pwr'].tolist()[:-1]))
     p533_rmse = get_rmse(medians_ma, np.array(p533_pred_df['rx_pwr'].tolist()[:-1]))
@@ -394,34 +395,42 @@ for month, year in months_list:
         analysis_df = analysis_df.append(get_null_entry(year, month), ignore_index=True)
         continue
     #Method 1
-    medians_df = wdf[(wdf[TX_SITE]>(wdf.Noise+15))].groupby('utc')[[TX_SITE]].median()
+    #medians_df = wdf[(wdf[TX_SITE]>(wdf.Noise+15))].groupby('utc')[[TX_SITE]].median()
     #print (medians_df)
     #medians_df is essentially a list of utc values and medians
-    #Method 2
-    for window in [0, 30, 60]:
-        for utc in range(0,24):
-            t = datetime.datetime(year,month,15, utc, 0, 0)
-            sample_start = (t - datetime.timedelta(minutes=window/2)).time()
-            sample_end = (t + datetime.timedelta(minutes=window/2)).time()
+    #Method 2a
+    medians_df = pd.DataFrame()
+    for utc in range(0,24):
+        t = datetime.datetime(year,month,15, utc, 0, 0)
+        sample_start = (t - datetime.timedelta(minutes=WINDOW/2)).time()
+        sample_end = (t + datetime.timedelta(minutes=WINDOW/2)).time()
 
-            sample = wdf.between_time(sample_start, sample_end, include_start=True, include_end=True)[TX_SITE]
-            #print(sample)
-            #print("{:d} Sample size = {:d}.  Median = {:.6f}".format(utc, sample.shape[0], sample.median()))
-            medians_df.set_value(utc, 'median_w{:d}'.format(window), sample.median())
-            medians_df.set_value(utc, 'median_w{:d}_std'.format(window), sample.std())
-            medians_df.set_value(utc, 'median_w{:d}_ss'.format(window), sample.shape[0])
-    #print (medians_df)
-    medians_df.to_csv("{:s}_{:s}_medians.csv".format(TX_SITE, RX_SITE))
+        sample = wdf.between_time(sample_start, sample_end, include_start=True, include_end=True)[TX_SITE]
+        medians_df.set_value(utc, 'median_pwr', sample.median())
+        medians_df.set_value(utc, 'median_std', sample.std())
+        medians_df.set_value(utc, 'median_sample', sample.shape[0])
 
     p533_pred_df = get_p553_prediction_df(TX_SITE, RX_SITE, year, month)
     voa_pred_df = get_voacap_prediction_df(TX_SITE, RX_SITE, year, month)
+
+    #print(p533_pred_df)
+    #print(voa_pred_df)
+
+    medians_df = pd.concat([medians_df, p533_pred_df['rx_pwr']], axis=1)
+    medians_df.rename(columns = {'rx_pwr':'p533_rx_pwr'}, inplace = True)
+
+    medians_df = pd.concat([medians_df, voa_pred_df[['rx_pwr', 'muf_day']]], axis=1)
+    medians_df.rename(columns = {'rx_pwr':'voa_rx_pwr', 'muf_day':'MUFDay'}, inplace = True)
 
     # Calculate RMS error
     monthly = do_analysis(medians_df, samples_size_list, voa_pred_df, p533_pred_df)
 
     s_rise, s_set = get_greyline_times(TX_SITE, RX_SITE, month, year)
 
-    # Do the plot
+    medians_df.to_csv("{:s}_{:s}_{:s}_{:d}_medians.csv".format(TX_SITE, RX_SITE, calendar.month_name[month], year))
+
+
+    # Do the plot/
     # colours: http://www.flatdesigncolors.com/
     if DO_PLOTS:
         ax = wdf.plot.scatter(x='utc',
@@ -434,19 +443,7 @@ for month, year in months_list:
         medians_df.index.name = 'utc'
         #print(medians_df.head())
         medians_df.reset_index(inplace=True)
-        medians_df.plot.scatter(x='utc', y=TX_SITE, color='#2C82C9', label='Median', s=75, ax=ax)
-
-        """ Some temporary plots follow"""
-        label="Median W0"
-        medians_df.plot.line(x='utc', y='median_w0', label=label, linewidth=2, marker='o', ax=ax)
-
-        label="Median W30"
-        medians_df.plot.line(x='utc', y='median_w30', label=label, linewidth=2, marker='o', ax=ax)
-
-        label="Median W60"
-        medians_df.plot.line(x='utc', y='median_w60', label=label, linewidth=2, marker='o', ax=ax)
-
-        """end of the temporary plots"""
+        medians_df.plot.scatter(x='utc', y='median_pwr', color='#2C82C9', label='Median', s=75, ax=ax)
 
         if not p533_pred_df.empty:
             label="Predicted (P533) (RMSE={:.2f} r={:.2f})".format(float(monthly['p533_rmse']), float(monthly['p533_corr']))
