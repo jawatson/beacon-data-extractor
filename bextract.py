@@ -48,8 +48,8 @@ pd.options.mode.chained_assignment = None  # default='warn'
 
 TX_SITE = 'GB3RAL'
 RX_SITE = 'G4ZFQ'
-start = (7, 2005) # A (month, year) tuple
-stop = (6, 2012) # (month, year) tuple or None for a single month
+start = (11, 2009) # A (month, year) tuple
+stop = (12, 2009) # (month, year) tuple or None for a single month
 #start = (1, 2010) # A (month, year) tuple
 #stop = None # (month, year) tuple or None for a single month
 
@@ -168,6 +168,8 @@ def get_voacap_prediction_df(tx_site, rx_site, year, month):
             result_list.append({"utc":idx+1, "rx_pwr":rx_pwr, "muf_day":muf_day})
         midnight = result_list[-1]
         result_list.insert(0, {"utc":0, "rx_pwr":midnight['rx_pwr'], "muf_day":midnight['muf_day']})
+        result_list = result_list[:-1]
+
     except Exception as e:
         print(text_in)
         print(e)
@@ -235,6 +237,7 @@ def get_p553_prediction_df(tx_site, rx_site, year, month):
                 result_list.append({"utc":idx+1, "rx_pwr":float(result.split(',')[4])})
         midnight = result_list[-1]
         result_list.insert(0, {"utc":0, "rx_pwr":midnight['rx_pwr']})
+        result_list = result_list[:-1]
     except Exception as e:
         print(text_in)
         print(e)
@@ -299,28 +302,33 @@ def get_rmse(l1, l2):
     return np.sqrt(((l1 - l2) ** 2).mean())
 
 
-def do_analysis(medians_df, sample_sizes, voa_pred_df, p533_pred_df):
+def do_analysis(medians_df, voa_pred_df, p533_pred_df):
     # Build a masked array of median values for each hour.  The mask hides missing UTC values.
     medians_ma = ma.masked_values([medians_df['median_pwr'].get(utc, 1.e20) for utc in np.arange(0,24,1)], 1.e20)
 
-    p533_corr = get_correlation(medians_ma, np.array(p533_pred_df['rx_pwr'].tolist()[:-1]))
-    p533_rmse = get_rmse(medians_ma, np.array(p533_pred_df['rx_pwr'].tolist()[:-1]))
-    voa_corr = get_correlation(medians_ma, np.array(voa_pred_df['rx_pwr'].tolist()[:-1]))
-    voa_rmse = get_rmse(medians_ma, np.array(voa_pred_df['rx_pwr'].tolist()[:-1]))
+    p533_corr = get_correlation(medians_ma, np.array(p533_pred_df['rx_pwr'].tolist()))
+    p533_rmse = get_rmse(medians_ma, np.array(p533_pred_df['rx_pwr'].tolist()))
+    voa_corr = get_correlation(medians_ma, np.array(voa_pred_df['rx_pwr'].tolist()))
+    voa_rmse = get_rmse(medians_ma, np.array(voa_pred_df['rx_pwr'].tolist()))
 
     # OR the mask with a mask for prob muf <= 0.03 (1 day) (True = value is masked.)
     medians_ma.mask = medians_ma.mask | [False if x>0.03 else True for x in voa_pred_df['muf_day'].tolist()[:-1]]
 
     # Calculate RMS and P between predicted and measured values
-    p533_corr_gt_1d = get_correlation(medians_ma, np.array(p533_pred_df['rx_pwr'].tolist()[:-1]))
-    p533_rmse_gt_1d = get_rmse(medians_ma, np.array(p533_pred_df['rx_pwr'].tolist()[:-1]))
-    voa_corr_gt_1d = get_correlation(medians_ma, np.array(voa_pred_df['rx_pwr'].tolist()[:-1]))
-    voa_rmse_gt_1d = get_rmse(medians_ma, np.array(voa_pred_df['rx_pwr'].tolist()[:-1]))
+    p533_corr_gt_1d = get_correlation(medians_ma, np.array(p533_pred_df['rx_pwr'].tolist()))
+    p533_rmse_gt_1d = get_rmse(medians_ma, np.array(p533_pred_df['rx_pwr'].tolist()))
+    voa_corr_gt_1d = get_correlation(medians_ma, np.array(voa_pred_df['rx_pwr'].tolist()))
+    voa_rmse_gt_1d = get_rmse(medians_ma, np.array(voa_pred_df['rx_pwr'].tolist()))
 
-    return {"p533_rmse": p533_rmse, "p533_corr": p533_corr,
+    voacap_residuals = voa_pred_df['rx_pwr'].subtract(medians_df['median_pwr'])
+    p533_residuals = p533_pred_df['rx_pwr'].subtract(medians_df['median_pwr'])
+
+    return ({"p533_rmse": p533_rmse, "p533_corr": p533_corr,
             "voa_rmse": voa_rmse, "voa_corr": voa_corr,
             "p533_rmse_gt_1d": p533_rmse_gt_1d, "p533_corr_gt_1d": p533_corr_gt_1d,
-            "voa_rmse_gt_1d": voa_rmse_gt_1d, "voa_corr_gt_1d": voa_corr_gt_1d}
+            "voa_rmse_gt_1d": voa_rmse_gt_1d, "voa_corr_gt_1d": voa_corr_gt_1d},
+            voacap_residuals,
+            p533_residuals)
 
 
 def get_null_entry(year, month):
@@ -353,6 +361,8 @@ def get_months_list(start, stop):
 
 #Dataframe to store the results
 analysis_df = pd.DataFrame(columns=("month", "p533_rmse", "p533_corr", "voa_rmse", "voa_corr"))
+voacap_residuals = pd.Series()
+p533_residuals = pd.Series()
 
 print("Loading RSGB Dataframe...")
 
@@ -369,7 +379,6 @@ months_list = get_months_list(start,stop)
 for month, year in months_list:
     # Grab the relevent subset of the df and perform the prediction
     print("{:s} - {:s} {:s} {:d}".format(TX_SITE, RX_SITE, calendar.month_name[month], year))
-
     wdf = df[(df.Year == year) & (df.Month == month) & (df.StnReporting == RX_SITE)]
 
     if wdf.empty:
@@ -399,7 +408,9 @@ for month, year in months_list:
     #print (medians_df)
     #medians_df is essentially a list of utc values and medians
     #Method 2a
+
     medians_df = pd.DataFrame()
+    sample_pts = []
     for utc in range(0,24):
         t = datetime.datetime(year,month,15, utc, 0, 0)
         sample_start = (t - datetime.timedelta(minutes=WINDOW/2)).time()
@@ -409,6 +420,8 @@ for month, year in months_list:
         medians_df.set_value(utc, 'median_pwr', sample.median())
         medians_df.set_value(utc, 'median_std', sample.std())
         medians_df.set_value(utc, 'median_sample', sample.shape[0])
+        sample_pts.append(sample.tolist())
+        #print(sample.tolist())
 
     p533_pred_df = get_p553_prediction_df(TX_SITE, RX_SITE, year, month)
     voa_pred_df = get_voacap_prediction_df(TX_SITE, RX_SITE, year, month)
@@ -423,7 +436,7 @@ for month, year in months_list:
     medians_df.rename(columns = {'rx_pwr':'voa_rx_pwr', 'muf_day':'MUFDay'}, inplace = True)
 
     # Calculate RMS error
-    monthly = do_analysis(medians_df, samples_size_list, voa_pred_df, p533_pred_df)
+    monthly, voacap_monthy_residuals, p533_monthy_residuals = do_analysis(medians_df, voa_pred_df, p533_pred_df)
 
     s_rise, s_set = get_greyline_times(TX_SITE, RX_SITE, month, year)
 
@@ -433,41 +446,55 @@ for month, year in months_list:
     # Do the plot/
     # colours: http://www.flatdesigncolors.com/
     if DO_PLOTS:
+
+        """
         ax = wdf.plot.scatter(x='utc',
                 y=TX_SITE,
                 xlim=(0,24),
                 ylim=(-180, -80),
                 color='#54acd2',
                 label='Measurement')
-
-        medians_df.index.name = 'utc'
-        #print(medians_df.head())
-        medians_df.reset_index(inplace=True)
-        medians_df.plot.scatter(x='utc', y='median_pwr', color='#2C82C9', label='Median', s=75, ax=ax)
+        """
+        #print(wdf.head)
+        plt.figure()
+        plt.boxplot(sample_pts)
+        ax = plt.gca()
 
         if not p533_pred_df.empty:
             label="Predicted (P533) (RMSE={:.2f} r={:.2f})".format(float(monthly['p533_rmse']), float(monthly['p533_corr']))
-            p533_pred_df.plot.line(x='utc', y='rx_pwr', color='#EB6B56', label=label, linewidth=2, marker='o', mec='#EB6B56', ax=ax)
+            p533_pred_df.plot.scatter(x='utc', y='rx_pwr', color='#EB6B56', label='P533', s=75, ax=ax)
+            #p533_pred_df.plot.line(x='utc', y='rx_pwr', color='#EB6B56', label=label, linewidth=2, marker='o', mec='#EB6B56', ax=ax)
 
         if not voa_pred_df.empty:
             label= "Predicted (VOA) (RMSE={:.2f} r={:.2f})".format(float(monthly['voa_rmse']), float(monthly['voa_corr']))
-            voa_pred_df.plot.line(x='utc', y='rx_pwr', color='#00A885', label=label, linewidth=2, marker='o', mec='#00A885', ax=ax)
+            voa_pred_df.plot.scatter(x='utc', y='rx_pwr', color='#00A885', label='VOACAP', s=75, ax=ax)
+            #voa_pred_df.plot.line(x='utc', y='rx_pwr', color='#00A885', label=label, linewidth=2, marker='o', mec='#00A885', ax=ax)
 
         ax.get_xaxis().tick_bottom()
         ax.get_yaxis().tick_left()
         ax.set_axis_bgcolor('#efefef')
-        ax.set_xticks(np.arange(0,25,1), minor=True)
-        ax.set_xticks(np.arange(0,25,6))
-        ax.axvspan(s_rise[0], s_rise[1], alpha=0.5, color="grey")
-        ax.axvspan(s_set[0], s_set[1], alpha=0.5, color="grey")
+        #ax.set_xticks(np.arange(0,25,1), minor=True)
+        #ax.set_xticks(np.arange(0,25,6
+        print("Sunrise extends from {:.2f} until {:.2f}".format(s_rise[0], s_rise[1]))
+        print("Sunset extends from {:.2f} until {:.2f}".format(s_set[0], s_set[1]))
+        ax.axvspan(s_rise[0]+1, s_rise[1]+1, alpha=0.5, color="grey")
+        ax.axvspan(s_set[0]+1, s_set[1]+1, alpha=0.5, color="grey")
+
         ax.set_xlabel("Universal Time (UTC)")
         ax.set_ylabel("Signal Power (dBW)")
+
         ax.set_title("{:s} - {:s} {:s} {:d}".format(TX_SITE, RX_SITE, calendar.month_name[month], year))
         #plt.show()
+        print("VOACAP Monthly Mean: {:.2f} Std.Dev: {:.2f}".format(voacap_monthy_residuals.mean(), voacap_monthy_residuals.std()))
+        print("  P533 Monthly Mean: {:.2f} Std.Dev: {:.2f}".format(p533_monthy_residuals.mean(), p533_monthy_residuals.std()))
+
         plt.savefig("{:s}-{:s}-{:d}-{:d}.png".format(TX_SITE, RX_SITE, year, month))
         plt.close()
     monthly['month'] = datetime.date(year, month, 15)
     analysis_df = analysis_df.append(monthly, ignore_index=True)
+    voacap_residuals = voacap_residuals.append(voacap_monthy_residuals, ignore_index=True)
+    p533_residuals = p533_residuals.append(p533_monthy_residuals, ignore_index=True)
+
 """
 print(analysis_df)
 col_names = ["p533_corr_gt_1d", "p533_rmse_gt_1d", "voa_corr_gt_1d", "voa_rmse_gt_1d"]
@@ -502,7 +529,6 @@ if stop:
 #End of main loop
 num_rows = len(analysis_df.index)
 num_valid_months = analysis_df['p533_corr_gt_1d'].count()
-print(analysis_df)
 print()
 if len(months_list) == 1:
     print("{:s}-{:s} {:s} {:d}".format(TX_SITE, RX_SITE, calendar.month_name[months_list[0][0]], months_list[0][1]))
@@ -517,5 +543,8 @@ print("MUFday > 1")
 print("==========")
 print("  P533 r: {:.2f}    P533 RMSE: {:.2f}".format(analysis_df['p533_corr_gt_1d'].mean(), analysis_df['p533_rmse_gt_1d'].mean()))
 print("VOACAP r: {:.2f}  VOACAP RMSE: {:.2f}".format(analysis_df['voa_corr_gt_1d'].mean(), analysis_df['voa_rmse_gt_1d'].mean()))
+
+print("VOACAP Mean: {:.2f} Std.Dev: {:.2f}".format(voacap_residuals.mean(), voacap_residuals.std()))
+print("  P533 Mean: {:.2f} Std.Dev: {:.2f}".format(p533_residuals.mean(), p533_residuals.std()))
 
 analysis_df.to_csv("{:s}_{:s}_summary.csv".format(TX_SITE, RX_SITE))
