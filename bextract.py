@@ -49,9 +49,9 @@ pd.options.mode.chained_assignment = None  # default='warn'
 TX_SITE = 'GB3RAL'
 RX_SITE = 'G4ZFQ'
 start = (11, 2009) # A (month, year) tuple
-stop = (12, 2009) # (month, year) tuple or None for a single month
+#stop = (12, 2009) # (month, year) tuple or None for a single month
 #start = (1, 2010) # A (month, year) tuple
-#stop = None # (month, year) tuple or None for a single month
+stop = None # (month, year) tuple or None for a single month
 
 # External application paths
 #BEACON_CSV = "/home/jwatson/Downloads/selective-beacon-export.csv"
@@ -323,10 +323,23 @@ def do_analysis(medians_df, voa_pred_df, p533_pred_df):
     voacap_residuals = voa_pred_df['rx_pwr'].subtract(medians_df['median_pwr'])
     p533_residuals = p533_pred_df['rx_pwr'].subtract(medians_df['median_pwr'])
 
-    return ({"p533_rmse": p533_rmse, "p533_corr": p533_corr,
-            "voa_rmse": voa_rmse, "voa_corr": voa_corr,
-            "p533_rmse_gt_1d": p533_rmse_gt_1d, "p533_corr_gt_1d": p533_corr_gt_1d,
-            "voa_rmse_gt_1d": voa_rmse_gt_1d, "voa_corr_gt_1d": voa_corr_gt_1d},
+    voa_residual_mean = np.mean(voacap_residuals)
+    voa_residual_sd = np.std(voacap_residuals)
+    p533_residual_mean = np.mean(p533_residuals)
+    p533_residual_sd = np.std(p533_residuals)
+
+    return ({"p533_rmse": p533_rmse, 
+            "p533_corr": p533_corr,
+            "voa_rmse": voa_rmse, 
+            "voa_corr": voa_corr,
+            "p533_rmse_gt_1d": p533_rmse_gt_1d, 
+            "p533_corr_gt_1d": p533_corr_gt_1d,
+            "voa_rmse_gt_1d": voa_rmse_gt_1d, 
+            "voa_corr_gt_1d": voa_corr_gt_1d,
+            "voa_residual_mean": voa_residual_mean,
+            "voa_residual_std": voa_residual_sd,
+            "p533_residual_mean": p533_residual_mean,
+            "p533_residual_std": p533_residual_sd }, 
             voacap_residuals,
             p533_residuals)
 
@@ -360,7 +373,7 @@ def get_months_list(start, stop):
 # START OF MAIN APPLICATION
 
 #Dataframe to store the results
-analysis_df = pd.DataFrame(columns=("month", "p533_rmse", "p533_corr", "voa_rmse", "voa_corr"))
+analysis_df = pd.DataFrame(columns=("month", "p533_rmse", "p533_corr", "voa_rmse", "voa_corr", "voa_residual_mean", "voa_residual_std", "p533_residual_mean", "p533_residual_std"))
 voacap_residuals = pd.Series()
 p533_residuals = pd.Series()
 
@@ -457,35 +470,35 @@ for month, year in months_list:
         """
         #print(wdf.head)
         plt.figure()
-        plt.boxplot(sample_pts)
+        plt.boxplot(sample_pts, positions=range(0,24))
         ax = plt.gca()
-
+        
         if not p533_pred_df.empty:
-            label="Predicted (P533) (RMSE={:.2f} r={:.2f})".format(float(monthly['p533_rmse']), float(monthly['p533_corr']))
-            p533_pred_df.plot.scatter(x='utc', y='rx_pwr', color='#EB6B56', label='P533', s=75, ax=ax)
-            #p533_pred_df.plot.line(x='utc', y='rx_pwr', color='#EB6B56', label=label, linewidth=2, marker='o', mec='#EB6B56', ax=ax)
+            label="P533 (RMSE={:.2f} r={:.2f} Mean={:.2f} SD={:.2f})".format(float(monthly['p533_rmse']), float(monthly['p533_corr']), float(monthly['p533_residual_mean']), float(monthly['p533_residual_std']))
+            ax.plot(p533_pred_df['utc'], p533_pred_df['rx_pwr'], color='#EB6B56', label=label, linewidth=2, marker='o', mec='#EB6B56')
 
         if not voa_pred_df.empty:
-            label= "Predicted (VOA) (RMSE={:.2f} r={:.2f})".format(float(monthly['voa_rmse']), float(monthly['voa_corr']))
-            voa_pred_df.plot.scatter(x='utc', y='rx_pwr', color='#00A885', label='VOACAP', s=75, ax=ax)
-            #voa_pred_df.plot.line(x='utc', y='rx_pwr', color='#00A885', label=label, linewidth=2, marker='o', mec='#00A885', ax=ax)
-
+            label= "VOACAP (RMSE={:.2f} r={:.2f} Mean={:.2f} SD={:.2f})".format(float(monthly['voa_rmse']), float(monthly['voa_corr']), float(monthly['voa_residual_mean']), float(monthly['voa_residual_std']))
+            ax.plot(voa_pred_df['utc'], voa_pred_df['rx_pwr'], color='#00A885', label=label, linewidth=2, marker='o', mec='#00A885')
+        
         ax.get_xaxis().tick_bottom()
+        ax.set_ylim([-160, -60])
         ax.get_yaxis().tick_left()
         ax.set_axis_bgcolor('#efefef')
         #ax.set_xticks(np.arange(0,25,1), minor=True)
         #ax.set_xticks(np.arange(0,25,6
         print("Sunrise extends from {:.2f} until {:.2f}".format(s_rise[0], s_rise[1]))
         print("Sunset extends from {:.2f} until {:.2f}".format(s_set[0], s_set[1]))
-        ax.axvspan(s_rise[0]+1, s_rise[1]+1, alpha=0.5, color="grey")
-        ax.axvspan(s_set[0]+1, s_set[1]+1, alpha=0.5, color="grey")
+        ax.axvspan(s_rise[0], s_rise[1], alpha=0.5, color="grey")
+        ax.axvspan(s_set[0], s_set[1], alpha=0.5, color="grey")
 
         ax.set_xlabel("Universal Time (UTC)")
         ax.set_ylabel("Signal Power (dBW)")
 
         ax.set_title("{:s} - {:s} {:s} {:d}".format(TX_SITE, RX_SITE, calendar.month_name[month], year))
+        ax.legend(loc='upper right')
         #plt.show()
-        print("VOACAP Monthly Mean: {:.2f} Std.Dev: {:.2f}".format(voacap_monthy_residuals.mean(), voacap_monthy_residuals.std()))
+        print("\nVOACAP Monthly Mean: {:.2f} Std.Dev: {:.2f}".format(voacap_monthy_residuals.mean(), voacap_monthy_residuals.std()))
         print("  P533 Monthly Mean: {:.2f} Std.Dev: {:.2f}".format(p533_monthy_residuals.mean(), p533_monthy_residuals.std()))
 
         plt.savefig("{:s}-{:s}-{:d}-{:d}.png".format(TX_SITE, RX_SITE, year, month))
