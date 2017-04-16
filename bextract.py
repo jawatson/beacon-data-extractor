@@ -26,6 +26,7 @@ with results obtained from the RSGBs 5MHz beacon project.
 
 import calendar
 import datetime
+import ephem
 import pandas as pd
 import numpy as np
 import numpy.ma as ma
@@ -38,17 +39,14 @@ import io
 import subprocess
 from tempfile import NamedTemporaryFile
 
-import sunrise
-
 matplotlib.style.use('ggplot')
 pd.options.mode.chained_assignment = None  # default='warn'
 
 """ CHANGE THESE PARAMETERS TO DEFINE THE CIRCUITS TO EVALUATE """
 
-
 TX_SITE = 'GB3RAL'
-RX_SITE = 'G4ZFQ'
-start = (11, 2009) # A (month, year) tuple
+RX_SITE = 'G3SET'
+start = (8, 2009) # A (month, year) tuple
 #stop = (12, 2009) # (month, year) tuple or None for a single month
 #start = (1, 2010) # A (month, year) tuple
 stop = None # (month, year) tuple or None for a single month
@@ -279,18 +277,26 @@ occurance for the event chosen from the min/max of the
 event times for the start and end of the month at each
 end of the link.
 """
+"""http://stackoverflow.com/questions/2637293/calculating-dawn-and-sunset-times-using-pyephem"""
 def get_greyline_times(site1, site2, month, year):
     sunrises = []
     sunsets = []
-
     for dom in [1, calendar.monthrange(year, month)[1]]:
         for site in [site1, site2]:
-            s = sunrise.sun(lat=float(sites[site]['lat']), long=float(sites[site]['lng']))
-            dt = datetime.datetime(year, month, dom)
-            st = s.sunrise(when=dt)
-            sunrises.append(st.hour + st.minute / 60)
-            st = s.sunset(when=dt)
-            sunsets.append(st.hour + st.minute / 60)
+            obs = ephem.Observer()
+            obs.date = "{:d}-{:d}-{:d}".format(year, month, dom)
+            obs.lat = str(sites[site]['lat'])
+            obs.long = str(sites[site]['lng'])
+            sunrise = obs.next_rising(ephem.Sun()).datetime()
+            sunset = obs.next_setting(ephem.Sun()).datetime()
+            sunrises.append(sunrise.hour + sunrise.minute / 60)
+            sunsets.append(sunset.hour + sunset.minute / 60)
+    """
+    For twilight settings;
+    obs.horizon = '-6' #-6=civil twilight, -12=nautical, -18=astronomical
+    beg_twilight=fred.previous_rising(ephem.Sun(), use_center=True) #Begin civil twilight
+    end_twilight=fred.next_setting   (ephem.Sun(), use_center=True) #End civil twilight
+    """
     return [(min(sunrises), max(sunrises)), (min(sunsets), max(sunsets))]
 
 
@@ -328,18 +334,18 @@ def do_analysis(medians_df, voa_pred_df, p533_pred_df):
     p533_residual_mean = np.mean(p533_residuals)
     p533_residual_sd = np.std(p533_residuals)
 
-    return ({"p533_rmse": p533_rmse, 
+    return ({"p533_rmse": p533_rmse,
             "p533_corr": p533_corr,
-            "voa_rmse": voa_rmse, 
+            "voa_rmse": voa_rmse,
             "voa_corr": voa_corr,
-            "p533_rmse_gt_1d": p533_rmse_gt_1d, 
+            "p533_rmse_gt_1d": p533_rmse_gt_1d,
             "p533_corr_gt_1d": p533_corr_gt_1d,
-            "voa_rmse_gt_1d": voa_rmse_gt_1d, 
+            "voa_rmse_gt_1d": voa_rmse_gt_1d,
             "voa_corr_gt_1d": voa_corr_gt_1d,
             "voa_residual_mean": voa_residual_mean,
             "voa_residual_std": voa_residual_sd,
             "p533_residual_mean": p533_residual_mean,
-            "p533_residual_std": p533_residual_sd }, 
+            "p533_residual_std": p533_residual_sd },
             voacap_residuals,
             p533_residuals)
 
@@ -472,7 +478,7 @@ for month, year in months_list:
         plt.figure()
         plt.boxplot(sample_pts, positions=range(0,24))
         ax = plt.gca()
-        
+
         if not p533_pred_df.empty:
             label="P533 (RMSE={:.2f} r={:.2f} Mean={:.2f} SD={:.2f})".format(float(monthly['p533_rmse']), float(monthly['p533_corr']), float(monthly['p533_residual_mean']), float(monthly['p533_residual_std']))
             ax.plot(p533_pred_df['utc'], p533_pred_df['rx_pwr'], color='#EB6B56', label=label, linewidth=2, marker='o', mec='#EB6B56')
@@ -480,9 +486,9 @@ for month, year in months_list:
         if not voa_pred_df.empty:
             label= "VOACAP (RMSE={:.2f} r={:.2f} Mean={:.2f} SD={:.2f})".format(float(monthly['voa_rmse']), float(monthly['voa_corr']), float(monthly['voa_residual_mean']), float(monthly['voa_residual_std']))
             ax.plot(voa_pred_df['utc'], voa_pred_df['rx_pwr'], color='#00A885', label=label, linewidth=2, marker='o', mec='#00A885')
-        
+
         ax.get_xaxis().tick_bottom()
-        ax.set_ylim([-160, -60])
+        ax.set_ylim([-170, -70])
         ax.get_yaxis().tick_left()
         ax.set_axis_bgcolor('#efefef')
         #ax.set_xticks(np.arange(0,25,1), minor=True)
@@ -495,7 +501,7 @@ for month, year in months_list:
         ax.set_xlabel("Universal Time (UTC)")
         ax.set_ylabel("Signal Power (dBW)")
 
-        ax.set_title("{:s} - {:s} {:s} {:d}".format(TX_SITE, RX_SITE, calendar.month_name[month], year))
+        #ax.set_title("{:s} - {:s} {:s} {:d}".format(TX_SITE, RX_SITE, calendar.month_name[month], year))
         ax.legend(loc='upper right')
         #plt.show()
         print("\nVOACAP Monthly Mean: {:.2f} Std.Dev: {:.2f}".format(voacap_monthy_residuals.mean(), voacap_monthy_residuals.std()))
